@@ -30,6 +30,7 @@ class AudioClassifier(private val context: Context) {
 
     private var interpreter: Interpreter? = null
     private var classLabels: List<String> = emptyList()
+    private var isInitialized = false
 
     data class ClassificationResult(
         val label: String,
@@ -39,9 +40,10 @@ class AudioClassifier(private val context: Context) {
 
     /**
      * Initialize the model and load class labels.
-     * Call this once (e.g. in Service.onCreate).
+     * Called automatically on first classify() call (lazy loading).
      */
-    fun initialize() {
+    private fun initialize() {
+        if (isInitialized) return
         try {
             val model = loadModelFile()
             val options = Interpreter.Options().apply {
@@ -49,6 +51,7 @@ class AudioClassifier(private val context: Context) {
             }
             interpreter = Interpreter(model, options)
             classLabels = loadClassLabels()
+            isInitialized = true
             Log.d(TAG, "YAMNet initialized with ${classLabels.size} classes")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize YAMNet", e)
@@ -63,6 +66,8 @@ class AudioClassifier(private val context: Context) {
      * @return Classification result with top label and confidence, or null on failure
      */
     fun classify(samples: ShortArray, sampleRate: Int): ClassificationResult? {
+        // Lazy-load model on first use
+        if (!isInitialized) initialize()
         val interp = interpreter ?: return null
         if (samples.isEmpty()) return null
 

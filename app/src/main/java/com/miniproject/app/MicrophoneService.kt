@@ -64,9 +64,8 @@ class MicrophoneService : Service() {
         super.onCreate()
         Log.d(TAG, "MicrophoneService created")
 
-        // Initialize YAMNet classifier
+        // Create classifier (model loads lazily on first threshold breach)
         audioClassifier = AudioClassifier(applicationContext)
-        audioClassifier?.initialize()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
