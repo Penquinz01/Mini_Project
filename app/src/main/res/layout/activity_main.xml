@@ -86,7 +86,17 @@
                     android:text="Waiting to start..."
                     android:textSize="20sp"
                     android:textColor="#444444"
-                    android:layout_marginBottom="16dp" />
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:id="@+id/textSoundClass"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="14sp"
+                    android:textColor="#666666"
+                    android:layout_marginBottom="16dp"
+                    android:visibility="gone" />
 
                 <ProgressBar
                     android:id="@+id/soundLevelBar"
@@ -197,7 +207,9 @@
                             android:layout_height="wrap_content"
                             android:inputType="numberDecimal"
                             android:text="80"
-                            android:textSize="18sp" />
+                            android:textSize="18sp"
+                            android:textColor="#333333"
+                            android:textColorHint="#888888" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <com.google.android.material.button.MaterialButton

@@ -8,6 +8,10 @@
     <!-- Microphone Access -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Storage access for saving audio captures (only needed pre-Android 10) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
     <!-- Background / Foreground Service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />

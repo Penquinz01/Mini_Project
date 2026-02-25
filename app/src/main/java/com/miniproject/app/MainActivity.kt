@@ -9,6 +9,7 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -28,7 +29,8 @@ class MainActivity : AppCompatActivity() {
             val db = intent?.getDoubleExtra(MicrophoneService.EXTRA_DB_LEVEL, 0.0) ?: 0.0
             val label = intent?.getStringExtra(MicrophoneService.EXTRA_LOUDNESS_LABEL) ?: ""
             val aboveThreshold = intent?.getBooleanExtra(MicrophoneService.EXTRA_ABOVE_THRESHOLD, false) ?: false
-            updateSoundDisplay(db, label, aboveThreshold)
+            val soundClass = intent?.getStringExtra(MicrophoneService.EXTRA_SOUND_CLASS) ?: ""
+            updateSoundDisplay(db, label, aboveThreshold, soundClass)
         }
     }
 
@@ -188,9 +190,15 @@ class MainActivity : AppCompatActivity() {
         updateUI()
     }
 
-    private fun updateSoundDisplay(db: Double, label: String, aboveThreshold: Boolean) {
+    private fun updateSoundDisplay(db: Double, label: String, aboveThreshold: Boolean, soundClass: String = "") {
         binding.textDbLevel.text = "${String.format("%.1f", db)} dB"
         binding.textLoudnessLabel.text = label
+
+        // Show sound classification if available
+        if (soundClass.isNotEmpty()) {
+            binding.textSoundClass.text = "🏷️ Detected: $soundClass"
+            binding.textSoundClass.visibility = View.VISIBLE
+        }
 
         // Turn text red when above threshold
         if (aboveThreshold) {

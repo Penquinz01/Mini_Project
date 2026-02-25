@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import kotlin.math.log10
 import kotlin.math.sqrt
+import kotlin.math.min
 
 class MicrophoneService : Service() {
 
@@ -29,6 +30,7 @@ class MicrophoneService : Service() {
         const val EXTRA_LOUDNESS_LABEL = "loudness_label"
         const val EXTRA_THRESHOLD = "threshold"
         const val EXTRA_ABOVE_THRESHOLD = "above_threshold"
+        const val EXTRA_SOUND_CLASS = "sound_class"
 
         // Loudness thresholds (dB SPL approximation)
         const val THRESHOLD_QUIET = 40.0
@@ -46,11 +48,25 @@ class MicrophoneService : Service() {
     private var userThreshold: Double = 80.0
     private var lastThresholdAlertTime: Long = 0
 
+    // Circular buffer for 1s audio capture (44100 Hz * 1.0s = 44100 samples)
+    private val captureBufferSize = 44100 // 44100 samples = 1 second
+    private val ringBuffer = ShortArray(captureBufferSize)
+    private var ringWritePos = 0
+    private var ringFilled = false // true once we've wrapped around at least once
+
+    // YAMNet audio classifier
+    private var audioClassifier: AudioClassifier? = null
+    private var lastSoundClass: String = ""
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "MicrophoneService created")
+
+        // Initialize YAMNet classifier
+        audioClassifier = AudioClassifier(applicationContext)
+        audioClassifier?.initialize()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -184,6 +200,9 @@ class MicrophoneService : Service() {
                 while (isRecording) {
                     val shortsRead = audioRecord?.read(buffer, 0, bufferSize) ?: 0
                     if (shortsRead > 0) {
+                        // Push samples into the circular ring buffer
+                        pushToRingBuffer(buffer, shortsRead)
+
                         // Calculate RMS amplitude
                         var sum = 0.0
                         for (i in 0 until shortsRead) {
@@ -218,19 +237,37 @@ class MicrophoneService : Service() {
                                 putExtra(EXTRA_DB_LEVEL, clampedDb)
                                 putExtra(EXTRA_LOUDNESS_LABEL, label)
                                 putExtra(EXTRA_ABOVE_THRESHOLD, aboveThreshold)
+                                putExtra(EXTRA_SOUND_CLASS, lastSoundClass)
                                 setPackage(packageName)
                             }
                             sendBroadcast(updateIntent)
 
-                            // Alert if above user-set threshold (max once every 10 seconds)
+                            // Alert + capture if above threshold (max once every 10 seconds)
                             val now = System.currentTimeMillis()
                             if (aboveThreshold && (now - lastThresholdAlertTime) > 10_000) {
                                 lastThresholdAlertTime = now
+
+                                // Capture 200ms of audio that triggered the alert
+                                val snapshot = snapshotRingBuffer()
+                                val ctx = applicationContext
+
+                                // Classify the audio with YAMNet
+                                val classification = audioClassifier?.classify(snapshot, sampleRate)
+                                val soundLabel = classification?.label ?: "Unknown"
+                                val confidence = classification?.confidence ?: 0f
+                                lastSoundClass = soundLabel
+
+                                // Update notification with sound class
                                 NotificationHelper.sendNotification(
                                     this,
                                     "⚠️ Sound Alert!",
-                                    "${String.format("%.0f", clampedDb)} dB exceeds your threshold of ${String.format("%.0f", userThreshold)} dB"
+                                    "${String.format("%.0f", clampedDb)} dB — $soundLabel (${String.format("%.0f", confidence * 100)}%)"
                                 )
+
+                                // Save WAV with classification label
+                                Thread {
+                                    AudioCapture.saveCapture(ctx, snapshot, sampleRate, soundLabel)
+                                }.start()
                             }
                         }
                     }
@@ -244,6 +281,44 @@ class MicrophoneService : Service() {
             Log.e(TAG, "Microphone permission not granted", e)
             stopSelf()
         }
+    }
+
+    /**
+     * Push new audio samples into the circular ring buffer.
+     */
+    private fun pushToRingBuffer(data: ShortArray, length: Int) {
+        var remaining = length
+        var srcOffset = 0
+        while (remaining > 0) {
+            val space = captureBufferSize - ringWritePos
+            val toCopy = min(remaining, space)
+            System.arraycopy(data, srcOffset, ringBuffer, ringWritePos, toCopy)
+            ringWritePos += toCopy
+            srcOffset += toCopy
+            remaining -= toCopy
+            if (ringWritePos >= captureBufferSize) {
+                ringWritePos = 0
+                ringFilled = true
+            }
+        }
+    }
+
+    /**
+     * Returns a copy of the ring buffer's contents in chronological order.
+     */
+    private fun snapshotRingBuffer(): ShortArray {
+        val totalSamples = if (ringFilled) captureBufferSize else ringWritePos
+        val result = ShortArray(totalSamples)
+        if (ringFilled) {
+            // oldest data starts at ringWritePos, wraps around
+            val tailLen = captureBufferSize - ringWritePos
+            System.arraycopy(ringBuffer, ringWritePos, result, 0, tailLen)
+            System.arraycopy(ringBuffer, 0, result, tailLen, ringWritePos)
+        } else {
+            // haven't wrapped yet — data is 0..ringWritePos
+            System.arraycopy(ringBuffer, 0, result, 0, ringWritePos)
+        }
+        return result
     }
 
     private fun getLoudnessLabel(db: Double): String {
@@ -278,6 +353,8 @@ class MicrophoneService : Service() {
 
     override fun onDestroy() {
         stopRecording()
+        audioClassifier?.close()
+        audioClassifier = null
         super.onDestroy()
         Log.d(TAG, "MicrophoneService destroyed")
     }
