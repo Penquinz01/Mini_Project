@@ -246,7 +246,7 @@ class MicrophoneService : Service() {
                             if (aboveThreshold && (now - lastThresholdAlertTime) > 10_000) {
                                 lastThresholdAlertTime = now
 
-                                // Capture 200ms of audio that triggered the alert
+                                // Capture 1s of audio that triggered the alert
                                 val snapshot = snapshotRingBuffer()
                                 val ctx = applicationContext
 
@@ -256,12 +256,24 @@ class MicrophoneService : Service() {
                                 val confidence = classification?.confidence ?: 0f
                                 lastSoundClass = soundLabel
 
-                                // Update notification with sound class
-                                NotificationHelper.sendNotification(
-                                    this,
-                                    "⚠️ Sound Alert!",
-                                    "${String.format("%.0f", clampedDb)} dB — $soundLabel (${String.format("%.0f", confidence * 100)}%)"
-                                )
+                                // Check if this is an emergency sound
+                                val isEmergency = isEmergencySound(soundLabel)
+
+                                if (isEmergency) {
+                                    // 🚨 EMERGENCY: high-priority notification + deep vibration
+                                    NotificationHelper.sendEmergencyNotification(
+                                        this,
+                                        "🚨 EMERGENCY DETECTED!",
+                                        "$soundLabel — ${String.format("%.0f", clampedDb)} dB (${String.format("%.0f", confidence * 100)}%)"
+                                    )
+                                } else {
+                                    // Normal threshold alert
+                                    NotificationHelper.sendNotification(
+                                        this,
+                                        "⚠️ Sound Alert!",
+                                        "${String.format("%.0f", clampedDb)} dB — $soundLabel (${String.format("%.0f", confidence * 100)}%)"
+                                    )
+                                }
 
                                 // Save WAV with classification label
                                 Thread {
@@ -280,6 +292,26 @@ class MicrophoneService : Service() {
             Log.e(TAG, "Microphone permission not granted", e)
             stopSelf()
         }
+    }
+
+    /**
+     * Emergency sound keywords from YAMNet's 521 classes.
+     * If the classified label contains any of these, it's treated as an emergency.
+     */
+    private val emergencySoundKeywords = listOf(
+        "siren", "ambulance", "police car", "fire engine", "fire truck",
+        "emergency vehicle", "civil defense",
+        "alarm", "fire alarm", "smoke detector", "smoke alarm", "car alarm",
+        "gunshot", "gunfire", "artillery", "explosion",
+        "screaming", "scream"
+    )
+
+    /**
+     * Check if a classified sound label matches an emergency sound.
+     */
+    private fun isEmergencySound(label: String): Boolean {
+        val lowerLabel = label.lowercase()
+        return emergencySoundKeywords.any { keyword -> lowerLabel.contains(keyword) }
     }
 
     /**

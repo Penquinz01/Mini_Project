@@ -105,6 +105,19 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Test emergency alert
+        binding.btnTestEmergency.setOnClickListener {
+            if (hasNotificationPermission()) {
+                NotificationHelper.sendEmergencyNotification(
+                    this,
+                    "🚨 EMERGENCY DETECTED!",
+                    "Ambulance (siren) — Test Alert (100%)"
+                )
+            } else {
+                Toast.makeText(this, "Grant notification permission first", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         // Toggle mic service
         binding.btnToggleMic.setOnClickListener {
             if (hasMicrophonePermission()) {
@@ -234,6 +247,7 @@ class MainActivity : AppCompatActivity() {
         binding.textStatusMic.text = if (micGranted) "✅ Granted" else "❌ Not Granted"
 
         binding.btnTestNotification.isEnabled = notifGranted
+        binding.btnTestEmergency.isEnabled = notifGranted
         binding.btnToggleMic.isEnabled = micGranted
         binding.btnToggleMic.text = if (isMicServiceRunning) "🛑 Stop Monitoring" else "🎙️ Start Monitoring"
     }

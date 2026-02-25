@@ -287,6 +287,18 @@
                     android:enabled="false"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     app:cornerRadius="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnTestEmergency"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="🚨 Test Emergency Alert"
+                    android:textSize="14sp"
+                    android:enabled="false"
+                    android:layout_marginTop="8dp"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    app:strokeColor="#F44336"
+                    app:cornerRadius="12dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

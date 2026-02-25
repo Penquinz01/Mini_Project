@@ -19,6 +19,9 @@
     <!-- Wake lock to keep mic active in background -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Vibration for emergency alerts -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!-- Auto-start on boot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
