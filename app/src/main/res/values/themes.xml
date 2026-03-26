@@ -9,6 +9,13 @@
         <item name="colorSecondary">@color/accent</item>
         <item name="colorOnSecondary">@color/black</item>
         <!-- Status bar color -->
-        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
+        <item name="android:statusBarColor">#FF00838F</item>
+    </style>
+
+    <!-- Full-screen emergency alert theme: no action bar, over lock screen -->
+    <style name="Theme.MiniProject.Alert" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#CC0000</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:statusBarColor">#AA0000</item>
     </style>
 </resources>

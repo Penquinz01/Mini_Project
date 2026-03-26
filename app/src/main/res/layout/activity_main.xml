@@ -3,17 +3,20 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/rootScrollView"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5"
+    android:background="#E8F5E9"
     tools:context=".MainActivity">
 
     <LinearLayout
+        android:id="@+id/rootLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:padding="20dp"
-        android:gravity="center_horizontal">
+        android:gravity="center_horizontal"
+        android:background="#E8F5E9">
 
         <!-- Title -->
         <TextView
@@ -25,7 +28,7 @@
             android:textStyle="bold"
             android:textColor="@color/primary"
             android:layout_marginTop="24dp"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="4dp" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -35,7 +38,7 @@
             android:textColor="#666666"
             android:layout_marginBottom="24dp" />
 
-        <!-- Request Permissions -->
+        <!-- Request Permissions — hidden in code if already granted -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRequestPermissions"
             android:layout_width="match_parent"
@@ -45,15 +48,16 @@
             android:layout_marginBottom="20dp"
             app:cornerRadius="12dp" />
 
-        <!-- Sound Level Display -->
+        <!-- Now Detecting Card -->
         <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardNowDetecting"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             app:cardCornerRadius="20dp"
-            app:cardElevation="6dp"
-            app:contentPadding="24dp"
-            app:cardBackgroundColor="#FFFFFF">
+            app:cardElevation="4dp"
+            app:contentPadding="28dp"
+            app:cardBackgroundColor="#C8E6C9">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -64,81 +68,31 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Current Sound Level"
-                    android:textSize="16sp"
-                    android:textColor="#888888"
-                    android:layout_marginBottom="12dp" />
+                    android:text="NOW DETECTING"
+                    android:textSize="11sp"
+                    android:textColor="#777777"
+                    android:letterSpacing="0.15"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:id="@+id/textDetectedSound"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🤫 Ambient"
+                    android:textSize="36sp"
+                    android:textStyle="bold"
+                    android:textColor="#1B5E20"
+                    android:gravity="center"
+                    android:layout_marginBottom="8dp" />
 
                 <TextView
                     android:id="@+id/textDbLevel"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="-- dB"
-                    android:textSize="48sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/primary"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/textLoudnessLabel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Waiting to start..."
-                    android:textSize="20sp"
-                    android:textColor="#444444"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:id="@+id/textSoundClass"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=""
-                    android:textSize="14sp"
-                    android:textColor="#666666"
-                    android:layout_marginBottom="16dp"
-                    android:visibility="gone" />
-
-                <ProgressBar
-                    android:id="@+id/soundLevelBar"
-                    style="@android:style/Widget.ProgressBar.Horizontal"
-                    android:layout_width="match_parent"
-                    android:layout_height="12dp"
-                    android:max="100"
-                    android:progress="0"
-                    android:progressDrawable="@drawable/sound_level_progress"
-                    android:layout_marginBottom="8dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Quiet"
-                        android:textSize="11sp"
-                        android:textColor="#888888" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Moderate"
-                        android:textSize="11sp"
-                        android:textColor="#888888"
-                        android:gravity="center" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Dangerous"
-                        android:textSize="11sp"
-                        android:textColor="#888888"
-                        android:gravity="end" />
-                </LinearLayout>
+                    android:textSize="18sp"
+                    android:textColor="#555555"
+                    android:layout_marginBottom="20dp" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnToggleMic"
@@ -147,12 +101,11 @@
                     android:text="🎙️ Start Monitoring"
                     android:textSize="14sp"
                     android:enabled="false"
-                    android:layout_marginTop="16dp"
                     app:cornerRadius="12dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- dB Threshold Input -->
+        <!-- Calibration / Threshold Card -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -160,7 +113,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="4dp"
             app:contentPadding="20dp"
-            app:cardBackgroundColor="#FFFFFF">
+            app:cardBackgroundColor="#B2E0F7FA">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -173,63 +126,45 @@
                     android:text="🔔 Alert Threshold"
                     android:textSize="18sp"
                     android:textStyle="bold"
+                    android:textColor="#555555"
                     android:layout_marginBottom="4dp" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Get notified when sound exceeds this level"
+                    android:text="Auto-calibrated · recalibrates every 30s"
                     android:textSize="13sp"
                     android:textColor="#888888"
                     android:layout_marginBottom="12dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginEnd="12dp"
-                        android:hint="dB threshold"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/editThreshold"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="numberDecimal"
-                            android:text="80"
-                            android:textSize="18sp"
-                            android:textColor="#333333"
-                            android:textColorHint="#888888" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnSetThreshold"
-                        android:layout_width="wrap_content"
-                        android:layout_height="48dp"
-                        android:text="Set"
-                        android:textSize="14sp"
-                        app:cornerRadius="12dp" />
-                </LinearLayout>
 
                 <TextView
                     android:id="@+id/textCurrentThreshold"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Current threshold: 80.0 dB"
+                    android:text="Current threshold: -- dB"
                     android:textSize="13sp"
                     android:textColor="@color/primary"
-                    android:textStyle="italic"
-                    android:layout_marginTop="8dp" />
+                    android:textStyle="italic" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCalibrate"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:text="🎯 Recalibrate Now"
+                    android:textSize="14sp"
+                    android:layout_marginTop="12dp"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    app:cornerRadius="12dp" />
+
+                <TextView
+                    android:id="@+id/textCalibrationStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="13sp"
+                    android:textColor="#666666"
+                    android:layout_marginTop="6dp"
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -241,7 +176,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="4dp"
             app:contentPadding="20dp"
-            app:cardBackgroundColor="#FFFFFF">
+            app:cardBackgroundColor="#B2E0F7FA">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -251,16 +186,24 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Push Notifications"
+                    android:text="🚨 Emergency Alerts"
                     android:textSize="18sp"
                     android:textStyle="bold"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Only urgent sounds trigger notifications"
+                    android:textSize="13sp"
+                    android:textColor="#888888"
                     android:layout_marginBottom="8dp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:layout_marginBottom="12dp">
+                    android:layout_marginBottom="6dp">
 
                     <TextView
                         android:layout_width="0dp"
@@ -278,15 +221,29 @@
                         android:textStyle="bold" />
                 </LinearLayout>
 
+                <!-- Full-screen alert status (Android 14+) -->
+                <TextView
+                    android:id="@+id/textStatusFullScreen"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🚨 Full-Screen Alerts: Checking..."
+                    android:textSize="13sp"
+                    android:textColor="#CC0000"
+                    android:textStyle="bold"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="12dp"
+                    android:visibility="gone" />
+
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnTestNotification"
                     android:layout_width="match_parent"
                     android:layout_height="48dp"
-                    android:text="🔔 Send Test Notification"
+                    android:text="🔔 Test Normal Notification"
                     android:textSize="14sp"
                     android:enabled="false"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    app:cornerRadius="12dp" />
+                    app:cornerRadius="12dp"
+                    android:visibility="gone"/>
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnTestEmergency"
@@ -295,7 +252,6 @@
                     android:text="🚨 Test Emergency Alert"
                     android:textSize="14sp"
                     android:enabled="false"
-                    android:layout_marginTop="8dp"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     app:strokeColor="#F44336"
                     app:cornerRadius="12dp" />
@@ -310,7 +266,7 @@
             app:cardCornerRadius="16dp"
             app:cardElevation="4dp"
             app:contentPadding="20dp"
-            app:cardBackgroundColor="#FFFFFF">
+            app:cardBackgroundColor="#B2E0F7FA">
 
             <LinearLayout
                 android:layout_width="match_parent"

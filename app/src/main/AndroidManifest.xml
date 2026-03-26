@@ -22,6 +22,9 @@
     <!-- Vibration for emergency alerts -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Full-screen notifications that take over screen (like emergency broadcast) -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- Auto-start on boot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -41,6 +44,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Full-screen emergency alert activity — shows over lock screen like an AMBER alert -->
+        <activity
+            android:name=".AlertActivity"
+            android:exported="false"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:showWhenLocked="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.MiniProject.Alert" />
 
         <!-- Foreground service for background mic usage -->
         <service

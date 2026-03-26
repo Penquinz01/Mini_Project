@@ -23,6 +23,7 @@ class MicrophoneService : Service() {
         const val NOTIFICATION_ID = 1001
         const val ACTION_STOP = "com.miniproject.app.STOP_MIC_SERVICE"
         const val ACTION_UPDATE_THRESHOLD = "com.miniproject.app.UPDATE_THRESHOLD"
+        const val ACTION_CALIBRATE = "com.miniproject.app.CALIBRATE"
 
         // Broadcast action to send dB updates to the activity
         const val ACTION_DB_UPDATE = "com.miniproject.app.DB_UPDATE"
@@ -31,6 +32,19 @@ class MicrophoneService : Service() {
         const val EXTRA_THRESHOLD = "threshold"
         const val EXTRA_ABOVE_THRESHOLD = "above_threshold"
         const val EXTRA_SOUND_CLASS = "sound_class"
+        const val EXTRA_CALIBRATING = "calibrating"
+        const val EXTRA_CALIBRATION_SECONDS_LEFT = "calibration_seconds_left"
+        const val EXTRA_CALIBRATED_AVG = "calibrated_avg"
+        const val EXTRA_SOUND_STATE = "sound_state"
+
+        // Sound states
+        const val STATE_AMBIENT = "ambient"
+        const val STATE_NORMAL = "normal"
+        const val STATE_URGENT = "urgent"
+
+        const val CALIBRATION_DURATION_MS = 5000L
+        const val CALIBRATION_OFFSET_DB = 10.0
+        const val ROLLING_RECALIB_INTERVAL = 30 // every 30 per-second ticks
 
         // Loudness thresholds (dB SPL approximation)
         const val THRESHOLD_QUIET = 40.0
@@ -47,6 +61,14 @@ class MicrophoneService : Service() {
     private var currentDb: Double = 0.0
     private var userThreshold: Double = 80.0
     private var lastThresholdAlertTime: Long = 0
+
+    // Calibration state
+    private var isCalibrating = false
+    private var calibrationStartTime: Long = 0
+    private val calibrationReadings = mutableListOf<Double>()
+
+    // Rolling silent recalibration (every 30s)
+    private val rollingReadings = mutableListOf<Double>()
 
     // Circular buffer for 1s audio capture (44100 Hz * 1.0s = 44100 samples)
     private val captureBufferSize = 44100 // 44100 samples = 1 second
@@ -78,6 +100,10 @@ class MicrophoneService : Service() {
             ACTION_UPDATE_THRESHOLD -> {
                 userThreshold = intent.getDoubleExtra(EXTRA_THRESHOLD, 80.0)
                 Log.d(TAG, "Threshold updated to $userThreshold dB")
+                return START_STICKY
+            }
+            ACTION_CALIBRATE -> {
+                startCalibration()
                 return START_STICKY
             }
         }
@@ -229,56 +255,106 @@ class MicrophoneService : Service() {
                         if (updateCounter >= (sampleRate / bufferSize)) {
                             updateCounter = 0
                             val aboveThreshold = clampedDb >= userThreshold
-                            updateNotification(label, clampedDb)
 
-                            // Broadcast dB level to activity
-                            val updateIntent = Intent(ACTION_DB_UPDATE).apply {
-                                putExtra(EXTRA_DB_LEVEL, clampedDb)
-                                putExtra(EXTRA_LOUDNESS_LABEL, label)
-                                putExtra(EXTRA_ABOVE_THRESHOLD, aboveThreshold)
-                                putExtra(EXTRA_SOUND_CLASS, lastSoundClass)
-                                setPackage(packageName)
-                            }
-                            sendBroadcast(updateIntent)
+                            // --- Calibration phase ---
+                            if (isCalibrating) {
+                                calibrationReadings.add(clampedDb)
+                                val elapsed = System.currentTimeMillis() - calibrationStartTime
+                                val secondsLeft = ((CALIBRATION_DURATION_MS - elapsed) / 1000).toInt().coerceAtLeast(0)
 
-                            // Alert + capture if above threshold (max once every 10 seconds)
-                            val now = System.currentTimeMillis()
-                            if (aboveThreshold && (now - lastThresholdAlertTime) > 10_000) {
-                                lastThresholdAlertTime = now
+                                updateNotification("Calibrating... ${secondsLeft}s", clampedDb)
 
-                                // Capture 1s of audio that triggered the alert
-                                val snapshot = snapshotRingBuffer()
-                                val ctx = applicationContext
+                                val updateIntent = Intent(ACTION_DB_UPDATE).apply {
+                                    putExtra(EXTRA_DB_LEVEL, clampedDb)
+                                    putExtra(EXTRA_LOUDNESS_LABEL, label)
+                                    putExtra(EXTRA_ABOVE_THRESHOLD, false)
+                                    putExtra(EXTRA_SOUND_CLASS, lastSoundClass)
+                                    putExtra(EXTRA_CALIBRATING, true)
+                                    putExtra(EXTRA_CALIBRATION_SECONDS_LEFT, secondsLeft)
+                                    putExtra(EXTRA_SOUND_STATE, STATE_AMBIENT)
+                                    setPackage(packageName)
+                                }
+                                sendBroadcast(updateIntent)
 
-                                // Classify the audio with YAMNet
-                                val classification = audioClassifier?.classify(snapshot, sampleRate)
-                                val soundLabel = classification?.label ?: "Unknown"
-                                val confidence = classification?.confidence ?: 0f
-                                lastSoundClass = soundLabel
-
-                                // Check if this is an emergency sound
-                                val isEmergency = isEmergencySound(soundLabel)
-
-                                if (isEmergency) {
-                                    // 🚨 EMERGENCY: high-priority notification + deep vibration
-                                    NotificationHelper.sendEmergencyNotification(
-                                        this,
-                                        "🚨 EMERGENCY DETECTED!",
-                                        "$soundLabel — ${String.format("%.0f", clampedDb)} dB (${String.format("%.0f", confidence * 100)}%)"
-                                    )
-                                } else {
-                                    // Normal threshold alert
-                                    NotificationHelper.sendNotification(
-                                        this,
-                                        "⚠️ Sound Alert!",
-                                        "${String.format("%.0f", clampedDb)} dB — $soundLabel (${String.format("%.0f", confidence * 100)}%)"
-                                    )
+                                if (elapsed >= CALIBRATION_DURATION_MS) {
+                                    finishCalibration()
+                                }
+                            } else {
+                                // --- Normal monitoring ---
+                                val isEmergency = aboveThreshold && isEmergencySound(lastSoundClass)
+                                val soundState = when {
+                                    isEmergency -> STATE_URGENT
+                                    aboveThreshold -> STATE_NORMAL
+                                    else -> STATE_AMBIENT
                                 }
 
-                                // Save WAV with classification label
-                                Thread {
-                                    AudioCapture.saveCapture(ctx, snapshot, sampleRate, soundLabel)
-                                }.start()
+                                // Rolling silent recalibration every 30s
+                                rollingReadings.add(clampedDb)
+                                if (rollingReadings.size >= ROLLING_RECALIB_INTERVAL) {
+                                    val avgDb = rollingReadings.average()
+                                    val newThreshold = (avgDb + CALIBRATION_OFFSET_DB).coerceIn(30.0, 130.0)
+                                    userThreshold = newThreshold
+                                    Log.d(TAG, "Rolling recalib: avg=${String.format("%.1f", avgDb)} → threshold=${String.format("%.1f", newThreshold)}")
+                                    rollingReadings.clear()
+
+                                    // Silent broadcast — no EXTRA_CALIBRATING, just new threshold
+                                    val recalibIntent = Intent(ACTION_DB_UPDATE).apply {
+                                        putExtra(EXTRA_DB_LEVEL, clampedDb)
+                                        putExtra(EXTRA_LOUDNESS_LABEL, label)
+                                        putExtra(EXTRA_ABOVE_THRESHOLD, clampedDb >= newThreshold)
+                                        putExtra(EXTRA_SOUND_CLASS, lastSoundClass)
+                                        putExtra(EXTRA_CALIBRATING, false)
+                                        putExtra(EXTRA_THRESHOLD, newThreshold)
+                                        putExtra(EXTRA_CALIBRATED_AVG, avgDb)
+                                        putExtra(EXTRA_SOUND_STATE, soundState)
+                                        setPackage(packageName)
+                                    }
+                                    sendBroadcast(recalibIntent)
+                                }
+
+                                updateNotification(label, clampedDb)
+
+                                val updateIntent = Intent(ACTION_DB_UPDATE).apply {
+                                    putExtra(EXTRA_DB_LEVEL, clampedDb)
+                                    putExtra(EXTRA_LOUDNESS_LABEL, label)
+                                    putExtra(EXTRA_ABOVE_THRESHOLD, aboveThreshold)
+                                    putExtra(EXTRA_SOUND_CLASS, lastSoundClass)
+                                    putExtra(EXTRA_CALIBRATING, false)
+                                    putExtra(EXTRA_SOUND_STATE, soundState)
+                                    setPackage(packageName)
+                                }
+                                sendBroadcast(updateIntent)
+
+                                // Alert + capture if above threshold (max once every 10 seconds)
+                                val now = System.currentTimeMillis()
+                                if (aboveThreshold && (now - lastThresholdAlertTime) > 10_000) {
+                                    lastThresholdAlertTime = now
+
+                                    val snapshot = snapshotRingBuffer()
+                                    val ctx = applicationContext
+
+                                    val classification = audioClassifier?.classify(snapshot, sampleRate)
+                                    val soundLabel = classification?.label ?: "Unknown"
+                                    val confidence = classification?.confidence ?: 0f
+                                    lastSoundClass = soundLabel
+
+                                    if (isEmergencySound(soundLabel)) {
+                                        // 🚨 EMERGENCY: full-screen alert + custom sound + deep vibration
+                                        NotificationHelper.sendEmergencyNotification(
+                                            context = this,
+                                            title = "🚨 EMERGENCY DETECTED!",
+                                            message = "$soundLabel — ${String.format("%.0f", clampedDb)} dB (${String.format("%.0f", confidence * 100)}%)",
+                                            soundClass = soundLabel,
+                                            dbLevel = clampedDb.toFloat(),
+                                            confidence = (confidence * 100).toInt()
+                                        )
+                                    }
+                                    // Non-emergency: no notification
+
+                                    Thread {
+                                        AudioCapture.saveCapture(ctx, snapshot, sampleRate, soundLabel)
+                                    }.start()
+                                }
                             }
                         }
                     }
@@ -303,7 +379,7 @@ class MicrophoneService : Service() {
         "emergency vehicle", "civil defense",
         "alarm", "fire alarm", "smoke detector", "smoke alarm", "car alarm",
         "gunshot", "gunfire", "artillery", "explosion",
-        "screaming", "scream"
+        "screaming", "scream","dog bark"
     )
 
     /**
@@ -350,6 +426,42 @@ class MicrophoneService : Service() {
             System.arraycopy(ringBuffer, 0, result, 0, ringWritePos)
         }
         return result
+    }
+
+    private fun startCalibration() {
+        Log.d(TAG, "Starting calibration...")
+        isCalibrating = true
+        calibrationStartTime = System.currentTimeMillis()
+        calibrationReadings.clear()
+    }
+
+    private fun finishCalibration() {
+        isCalibrating = false
+        if (calibrationReadings.isEmpty()) {
+            Log.w(TAG, "Calibration finished with no readings")
+            return
+        }
+
+        val avgDb = calibrationReadings.average()
+        val newThreshold = (avgDb + CALIBRATION_OFFSET_DB).coerceIn(30.0, 130.0)
+        userThreshold = newThreshold
+
+        Log.d(TAG, "Calibration done: avg=${String.format("%.1f", avgDb)} dB, new threshold=${String.format("%.1f", newThreshold)} dB")
+
+        // Broadcast calibration result to UI
+        val doneIntent = Intent(ACTION_DB_UPDATE).apply {
+            putExtra(EXTRA_DB_LEVEL, avgDb)
+            putExtra(EXTRA_LOUDNESS_LABEL, getLoudnessLabel(avgDb))
+            putExtra(EXTRA_ABOVE_THRESHOLD, false)
+            putExtra(EXTRA_SOUND_CLASS, lastSoundClass)
+            putExtra(EXTRA_CALIBRATING, false)
+            putExtra(EXTRA_CALIBRATED_AVG, avgDb)
+            putExtra(EXTRA_THRESHOLD, newThreshold)
+            setPackage(packageName)
+        }
+        sendBroadcast(doneIntent)
+
+        calibrationReadings.clear()
     }
 
     private fun getLoudnessLabel(db: Double): String {
