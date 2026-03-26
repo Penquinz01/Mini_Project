@@ -110,6 +110,11 @@ class MainActivity : AppCompatActivity() {
             requestAllPermissions()
         }
 
+        // View Logs
+        binding.btnViewLogs.setOnClickListener {
+            startActivity(Intent(this, LogsActivity::class.java))
+        }
+
         // Test notification
         binding.btnTestNotification.setOnClickListener {
             if (hasNotificationPermission()) {

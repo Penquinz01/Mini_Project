@@ -38,6 +38,16 @@
             android:textColor="#666666"
             android:layout_marginBottom="24dp" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnViewLogs"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="📜 View Sound Logs"
+            android:textSize="16sp"
+            android:layout_marginBottom="20dp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            app:cornerRadius="12dp" />
+
         <!-- Request Permissions — hidden in code if already granted -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnRequestPermissions"

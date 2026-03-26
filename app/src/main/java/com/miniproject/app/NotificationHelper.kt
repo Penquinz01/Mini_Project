@@ -63,7 +63,7 @@ object NotificationHelper {
             ).apply {
                 description = "Urgent alerts when emergency sounds (sirens, alarms) are detected"
                 enableVibration(true)
-                vibrationPattern = longArrayOf(0, 400, 200, 400, 200, 400)
+                vibrationPattern = longArrayOf(0, 3000)
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                 enableLights(true)
                 lightColor = 0xFFFF0000.toInt()
@@ -165,7 +165,7 @@ object NotificationHelper {
             .setContentIntent(openAppPendingIntent)
             .setFullScreenIntent(fullScreenPendingIntent, true)   // ← THE KEY: full-screen takeover
             .setAutoCancel(true)
-            .setVibrate(longArrayOf(0, 400, 200, 400, 200, 400, 200, 400))
+            .setVibrate(longArrayOf(0, 3000))
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .build()
 
@@ -225,20 +225,20 @@ object NotificationHelper {
      * Triggers a deep repeating vibration pattern for emergency alerts.
      */
     private fun triggerEmergencyVibration(context: Context) {
-        val pattern = longArrayOf(0, 400, 200, 400, 200, 400, 200, 400, 200, 600)
+        val durationMs = 3000L
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vibratorManager =
                 context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-            vibratorManager.defaultVibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+            vibratorManager.defaultVibrator.vibrate(VibrationEffect.createOneShot(durationMs, 255))
         } else {
             @Suppress("DEPRECATION")
             val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                vibrator.vibrate(VibrationEffect.createOneShot(durationMs, 255))
             } else {
                 @Suppress("DEPRECATION")
-                vibrator.vibrate(pattern, -1)
+                vibrator.vibrate(durationMs)
             }
         }
     }

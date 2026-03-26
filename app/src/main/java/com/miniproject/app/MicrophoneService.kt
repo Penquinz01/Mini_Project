@@ -43,7 +43,7 @@ class MicrophoneService : Service() {
         const val STATE_URGENT = "urgent"
 
         const val CALIBRATION_DURATION_MS = 5000L
-        const val CALIBRATION_OFFSET_DB = 10.0
+        const val CALIBRATION_OFFSET_DB = 5.0
         const val ROLLING_RECALIB_INTERVAL = 30 // every 30 per-second ticks
 
         // Loudness thresholds (dB SPL approximation)
@@ -61,6 +61,7 @@ class MicrophoneService : Service() {
     private var currentDb: Double = 0.0
     private var userThreshold: Double = 80.0
     private var lastThresholdAlertTime: Long = 0
+    private var lastClassificationTime: Long = 0
 
     // Calibration state
     private var isCalibrating = false
@@ -80,6 +81,9 @@ class MicrophoneService : Service() {
     private var audioClassifier: AudioClassifier? = null
     private var lastSoundClass: String = ""
 
+    // SQLite Logging
+    private lateinit var dbHelper: DatabaseHelper
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -88,6 +92,9 @@ class MicrophoneService : Service() {
 
         // Create classifier (model loads lazily on first threshold breach)
         audioClassifier = AudioClassifier(applicationContext)
+        
+        // Initialize logging db
+        dbHelper = DatabaseHelper(applicationContext)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -281,7 +288,7 @@ class MicrophoneService : Service() {
                                 }
                             } else {
                                 // --- Normal monitoring ---
-                                val isEmergency = aboveThreshold && isEmergencySound(lastSoundClass)
+                                val isEmergency = aboveThreshold && (isEmergencySound(lastSoundClass) || clampedDb > (userThreshold + 10.0))
                                 val soundState = when {
                                     isEmergency -> STATE_URGENT
                                     aboveThreshold -> STATE_NORMAL
@@ -314,6 +321,66 @@ class MicrophoneService : Service() {
 
                                 updateNotification(label, clampedDb)
 
+                                val now = System.currentTimeMillis()
+                                
+                                // Continuous classification if above threshold (every 1 second)
+                                if (aboveThreshold && (now - lastClassificationTime) > 1000) {
+                                    lastClassificationTime = now
+
+                                    val snapshot = snapshotRingBuffer()
+                                    val ctx = applicationContext
+
+                                    val classification = audioClassifier?.classify(snapshot, sampleRate)
+                                    val soundLabel = classification?.label ?: "Unknown"
+                                    val confidence = classification?.confidence ?: 0f
+                                    
+                                    val isExtremelyLoud = clampedDb > (userThreshold + 10.0)
+                                    val isEmergencyClass = confidence >= 0.3f && isEmergencySound(soundLabel)
+                                    val isEmergency = isEmergencyClass || isExtremelyLoud
+                                    
+                                    if (confidence >= 0.3f) {
+                                        lastSoundClass = soundLabel
+                                    } else if (lastSoundClass.isEmpty() || !aboveThreshold || isExtremelyLoud) {
+                                        lastSoundClass = "Loud Noise"
+                                    }
+
+                                    // Evaluate logging and emergency actions
+                                    if (confidence >= 0.3f || isExtremelyLoud) {
+                                        
+                                        // Save to database
+                                        val logEntry = LogEntry(
+                                            timestamp = now,
+                                            soundClass = lastSoundClass,
+                                            dbLevel = clampedDb.toFloat(),
+                                            confidence = confidence,
+                                            isEmergency = isEmergency
+                                        )
+                                        dbHelper.insertLog(logEntry)
+
+                                        // Alert if emergency (max once every 10 seconds)
+                                        if (isEmergency && (now - lastThresholdAlertTime) > 10_000) {
+                                            lastThresholdAlertTime = now
+
+                                            val confString = if (confidence >= 0.3f) "(${String.format("%.0f", confidence * 100)}%)" else "(Volume Trigger)"
+                                            
+                                            // 🚨 EMERGENCY: full-screen alert + custom sound + deep vibration
+                                            NotificationHelper.sendEmergencyNotification(
+                                                context = this@MicrophoneService,
+                                                title = "🚨 EMERGENCY DETECTED!",
+                                                message = "$lastSoundClass — ${String.format("%.0f", clampedDb)} dB $confString",
+                                                soundClass = lastSoundClass,
+                                                dbLevel = clampedDb.toFloat(),
+                                                confidence = (confidence * 100).toInt().coerceAtLeast(0)
+                                            )
+                                            
+                                            Thread {
+                                                AudioCapture.saveCapture(ctx, snapshot, sampleRate, lastSoundClass)
+                                            }.start()
+                                        }
+                                    }
+                                }
+
+                                // Update UI AFTER potential classification
                                 val updateIntent = Intent(ACTION_DB_UPDATE).apply {
                                     putExtra(EXTRA_DB_LEVEL, clampedDb)
                                     putExtra(EXTRA_LOUDNESS_LABEL, label)
@@ -324,37 +391,6 @@ class MicrophoneService : Service() {
                                     setPackage(packageName)
                                 }
                                 sendBroadcast(updateIntent)
-
-                                // Alert + capture if above threshold (max once every 10 seconds)
-                                val now = System.currentTimeMillis()
-                                if (aboveThreshold && (now - lastThresholdAlertTime) > 10_000) {
-                                    lastThresholdAlertTime = now
-
-                                    val snapshot = snapshotRingBuffer()
-                                    val ctx = applicationContext
-
-                                    val classification = audioClassifier?.classify(snapshot, sampleRate)
-                                    val soundLabel = classification?.label ?: "Unknown"
-                                    val confidence = classification?.confidence ?: 0f
-                                    lastSoundClass = soundLabel
-
-                                    if (isEmergencySound(soundLabel)) {
-                                        // 🚨 EMERGENCY: full-screen alert + custom sound + deep vibration
-                                        NotificationHelper.sendEmergencyNotification(
-                                            context = this,
-                                            title = "🚨 EMERGENCY DETECTED!",
-                                            message = "$soundLabel — ${String.format("%.0f", clampedDb)} dB (${String.format("%.0f", confidence * 100)}%)",
-                                            soundClass = soundLabel,
-                                            dbLevel = clampedDb.toFloat(),
-                                            confidence = (confidence * 100).toInt()
-                                        )
-                                    }
-                                    // Non-emergency: no notification
-
-                                    Thread {
-                                        AudioCapture.saveCapture(ctx, snapshot, sampleRate, soundLabel)
-                                    }.start()
-                                }
                             }
                         }
                     }
@@ -379,7 +415,7 @@ class MicrophoneService : Service() {
         "emergency vehicle", "civil defense",
         "alarm", "fire alarm", "smoke detector", "smoke alarm", "car alarm",
         "gunshot", "gunfire", "artillery", "explosion",
-        "screaming", "scream","dog bark"
+        "screaming", "scream","dog bark", "baby cry", "glass breaking","car honk", "unrecognized"
     )
 
     /**
@@ -443,7 +479,7 @@ class MicrophoneService : Service() {
         }
 
         val avgDb = calibrationReadings.average()
-        val newThreshold = (avgDb + CALIBRATION_OFFSET_DB).coerceIn(30.0, 130.0)
+        val newThreshold = (avgDb + CALIBRATION_OFFSET_DB).coerceIn(30.0, 85.0)
         userThreshold = newThreshold
 
         Log.d(TAG, "Calibration done: avg=${String.format("%.1f", avgDb)} dB, new threshold=${String.format("%.1f", newThreshold)} dB")

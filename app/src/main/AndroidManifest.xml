@@ -45,6 +45,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".LogsActivity"
+            android:theme="@style/Theme.MaterialComponents.Light.NoActionBar"
+            android:exported="false" />
+
         <!-- Full-screen emergency alert activity — shows over lock screen like an AMBER alert -->
         <activity
             android:name=".AlertActivity"
