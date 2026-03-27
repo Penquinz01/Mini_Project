@@ -23,7 +23,7 @@ object NotificationHelper {
 
     const val CHANNEL_ID_GENERAL = "general_notifications"
     const val CHANNEL_ID_MIC_SERVICE = "mic_service"
-    const val CHANNEL_ID_EMERGENCY = "emergency_alerts"
+    const val CHANNEL_ID_EMERGENCY = "emergency_alerts_v2"
 
     // Sound classifications → which alert sound to play
     private val CAR_SOUND_KEYWORDS = listOf(
@@ -55,7 +55,6 @@ object NotificationHelper {
                 description = "Shows when the microphone is actively recording in the background"
             }
 
-            // Emergency alerts — max priority, bypass DND
             val emergencyChannel = NotificationChannel(
                 CHANNEL_ID_EMERGENCY,
                 "Emergency Alerts",
@@ -67,14 +66,8 @@ object NotificationHelper {
                 lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
                 enableLights(true)
                 lightColor = 0xFFFF0000.toInt()
-                // Use alarm audio stream so it plays even in silent mode
-                setSound(
-                    Uri.parse("android.resource://${context.packageName}/${R.raw.alert_siren}"),
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build()
-                )
+                // Sound is handled by custom MediaPlayer based on sound class, disable channel sound
+                setSound(null, null)
             }
 
             val notificationManager =
