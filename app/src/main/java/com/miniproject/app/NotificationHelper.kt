@@ -6,9 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
-import android.media.AudioManager
 import android.media.MediaPlayer
-import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -24,6 +22,7 @@ object NotificationHelper {
     const val CHANNEL_ID_GENERAL = "general_notifications"
     const val CHANNEL_ID_MIC_SERVICE = "mic_service"
     const val CHANNEL_ID_EMERGENCY = "emergency_alerts_v2"
+    private const val ENABLE_EMERGENCY_SOUND = false
 
     // Sound classifications → which alert sound to play
     private val CAR_SOUND_KEYWORDS = listOf(
@@ -104,14 +103,18 @@ object NotificationHelper {
             .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
+        try {
+            NotificationManagerCompat.from(context).notify(notificationId, notification)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Notification permission not granted", e)
+        }
     }
 
     /**
      * Send a full-screen emergency notification that disrupts the screen (like mobile operator alerts).
      * - Launches AlertActivity over the lock screen
-     * - Plays a custom alert sound based on the detected sound class
      * - Triggers deep vibration
+     * - Optionally plays a custom alert sound (disabled by default)
      */
     fun sendEmergencyNotification(
         context: Context,
@@ -171,8 +174,10 @@ object NotificationHelper {
         // ---- Vibration ----
         triggerEmergencyVibration(context)
 
-        // ---- Play custom alert sound via MediaPlayer on ALARM stream ----
-        playAlertSound(context, soundClass)
+        // Keep emergency alerts silent unless explicitly enabled in code.
+        if (ENABLE_EMERGENCY_SOUND) {
+            playAlertSound(context, soundClass)
+        }
     }
 
     /**
@@ -192,7 +197,7 @@ object NotificationHelper {
         }
 
         try {
-            val mediaPlayer = MediaPlayer().apply {
+            MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
